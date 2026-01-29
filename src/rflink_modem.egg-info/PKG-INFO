@@ -1,5 +1,5 @@
 Metadata-Version: 2.4
-Name: rflink-modem
+Name: rflink_modem
 Version: 0.1.0
 Summary: Modular digital modem and link verification toolkit (audio/WAV first).
 Author: Hunter Stingel

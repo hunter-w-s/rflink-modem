@@ -1,10 +1,10 @@
 LICENSE
 README.md
 pyproject.toml
-src/rflink-modem/__init__.py
-src/rflink-modem/utils/__init__.py
-src/rflink-modem/utils/bitops.py
+src/rflink_modem/__init__.py
 src/rflink_modem.egg-info/PKG-INFO
 src/rflink_modem.egg-info/SOURCES.txt
 src/rflink_modem.egg-info/dependency_links.txt
 src/rflink_modem.egg-info/top_level.txt
+src/rflink_modem/utils/__init__.py
+src/rflink_modem/utils/bitops.py
