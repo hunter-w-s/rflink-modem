@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: rflink-modem
+Version: 0.1.0
+Summary: Modular digital modem and link verification toolkit (audio/WAV first).
+Author: Hunter Stingel
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# rflink-modem
+A modular, verification-first digital communications front end for encoding data into audio-band waveforms, modeling channel impairments, and validating error-correction performance with reproducible metrics.
