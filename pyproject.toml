@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rflink-modem"
+name = "rflink_modem"
 version = "0.1.0"
 description = "Modular digital modem and link verification toolkit (audio/WAV first)."
 readme = "README.md"
