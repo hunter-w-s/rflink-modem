@@ -1,0 +1,31 @@
+# Virtual environments (VERY IMPORTANT)
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Audio / signal artifacts
+*.wav
+*.mp3
+*.c64
+*.iq
+
+# OS junk
+.DS_Store
+Thumbs.db
