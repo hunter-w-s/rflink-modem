@@ -4,6 +4,9 @@ venv/
 ENV/
 env/
 
+tests/output/
+tests/outputs/
+
 # Python cache
 __pycache__/
 *.pyc

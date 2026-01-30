@@ -1,32 +1,28 @@
 from __future__ import annotations
 
-from pathlib import Path
 import random
 import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from rflink_modem.modem.pipeline import tx_bytes_to_pcm, rx_pcm_to_bytes
 from rflink_modem.modem.audio.afsk_tx import AFSKTxConfig
+from rflink_modem.modem.pipeline import tx_bytes_to_pcm, rx_pcm_to_bytes
+from tests.conftest import sample_assets_dir, outputs_unrev_test_dir
 
 
-def _repo_root() -> Path:
-    # tests/unit/test_*.py -> tests/unit -> tests -> repo root
-    return Path(__file__).resolve().parents[2]
+def _out_dir(request, case: str) -> Path:
+    base = outputs_unrev_test_dir(request) / case
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 
-def _out_dir(case: str) -> Path:
-    d = _repo_root() / "tests" / "output" / "pipeline_test" / case
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def _payload_from_asset(max_len: int = 200) -> bytes:
-    # Keep it under RS(255) limits: frame + nsym must be <= 255
-    p = _repo_root() / "tests" / "assets" / "cwg.png"
-    data = p.read_bytes()
-    return data[:max_len]
+def _payload_from_asset(n: int) -> bytes:
+    data = (sample_assets_dir() / "cwg.png").read_bytes()
+    return data[:n]
 
 
 def _payload_random(rng: random.Random, n: int = 200) -> bytes:
@@ -34,13 +30,9 @@ def _payload_random(rng: random.Random, n: int = 200) -> bytes:
 
 
 @pytest.mark.parametrize("case", ["asset_png", "random_bytes"])
-def test_pipeline_verbose_artifacts(case):
+def test_pipeline_verbose_artifacts(case, request):
     rng = random.Random(0xBEEF)
-
-    if case == "asset_png":
-        payload = _payload_from_asset(200)
-    else:
-        payload = _payload_random(rng, 200)
+    payload = _payload_from_asset(200) if case == "asset_png" else _payload_random(rng, 200)
 
     cfg = AFSKTxConfig(
         sample_rate=48000,
@@ -52,14 +44,11 @@ def test_pipeline_verbose_artifacts(case):
         trail_silence_s=0.25,
     )
 
-    # Clean old outputs for this case so you only see current run artifacts.
-    base = _out_dir(case)
-    if base.exists():
-        shutil.rmtree(base)
-    base.mkdir(parents=True, exist_ok=True)
-
+    base = _out_dir(request, case)
     tx_dir = base / "tx"
     rx_dir = base / "rx"
+    tx_dir.mkdir(parents=True, exist_ok=True)
+    rx_dir.mkdir(parents=True, exist_ok=True)
 
     pcm = tx_bytes_to_pcm(
         payload,
@@ -72,7 +61,6 @@ def test_pipeline_verbose_artifacts(case):
 
     # Optional deterministic impairment (keep mild)
     pcm_corrupted = np.array(pcm, copy=True)
-    # tiny dropout segment in the *middle* of payload region
     mid = pcm_corrupted.shape[0] // 2
     pcm_corrupted[mid : mid + 200] = 0.0
 
