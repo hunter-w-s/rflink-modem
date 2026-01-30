@@ -1,0 +1,16 @@
+{
+  "afsk_cfg": {
+    "amplitude": 0.8,
+    "lead_silence_s": 0.0,
+    "mark_hz": 20000.0,
+    "sample_rate": 96000,
+    "space_hz": 12000.0,
+    "symbol_rate": 9600,
+    "trail_silence_s": 0.0
+  },
+  "direction": "rx_blocks",
+  "dump_blocks": false,
+  "interleave_depth": 8,
+  "nsym": 10,
+  "num_blocks": 137
+}
