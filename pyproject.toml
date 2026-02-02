@@ -21,4 +21,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+  "characterization: long-running, limit-finding tests (not run by default)",
+]
+
 
