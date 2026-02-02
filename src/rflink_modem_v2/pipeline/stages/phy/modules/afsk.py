@@ -5,16 +5,13 @@ from typing import Tuple
 
 import numpy as np
 
-# Optional helpers (keep if you want WAV I/O here)
-from rflink_modem.containers.wav import read_wav_mono, write_wav_mono
-
 
 # ============================================================
-# Uniform PHY module API
+# Uniform module API (canonical external functions)
 #   - Config
-#   - modulate(bits, cfg) -> pcm
-#   - demodulate(pcm, cfg) -> bits
-#   - Demodulator(cfg).demodulate(pcm) -> bits   (optional cache)
+#   - tx(bits, cfg) -> pcm
+#   - rx(pcm, cfg) -> bits
+#   - RX(cfg).rx(pcm) -> bits   (optional cache)
 # ============================================================
 
 @dataclass(frozen=True)
@@ -27,10 +24,10 @@ class Config:
       - mark/space are in Hz.
       - waveform is float32 mono PCM in ~[-amplitude, +amplitude].
     """
-    sample_rate: int = 48000
-    symbol_rate: int = 1200
-    mark_hz: float = 2200.0
-    space_hz: float = 1200.0
+    sample_rate: int = 48_000
+    symbol_rate: int = 1_200
+    mark_hz: float = 2_200.0
+    space_hz: float = 1_200.0
     amplitude: float = 0.8
     lead_silence_s: float = 0.0
     trail_silence_s: float = 0.0
@@ -55,10 +52,10 @@ def _validate_bits(bits: np.ndarray) -> np.ndarray:
 
 
 # ----------------------------
-# Modulator (uniform entrypoint)
+# TX (canonical entrypoint)
 # ----------------------------
 
-def modulate(bits: np.ndarray, cfg: Config) -> np.ndarray:
+def tx(bits: np.ndarray, cfg: Config) -> np.ndarray:
     """
     Vectorized, phase-continuous AFSK/BFSK modulator.
 
@@ -72,9 +69,11 @@ def modulate(bits: np.ndarray, cfg: Config) -> np.ndarray:
     inc_mark = (2.0 * np.pi * float(cfg.mark_hz)) / float(fs)
     inc_space = (2.0 * np.pi * float(cfg.space_hz)) / float(fs)
 
+    # Map each symbol to its phase increment and repeat for SPS samples.
     inc_sym = np.where(b == 1, inc_mark, inc_space).astype(np.float64)
     inc = np.repeat(inc_sym, sps)
 
+    # Phase-continuous waveform by cumulative sum of increments.
     phase = np.cumsum(inc)
     if phase.size:
         phase -= inc[0]
@@ -91,12 +90,8 @@ def modulate(bits: np.ndarray, cfg: Config) -> np.ndarray:
     return pcm
 
 
-# Back-compat alias (optional; remove once all callers migrate)
-modulate_bits = modulate
-
-
 # ----------------------------
-# Demodulator internals
+# RX internals
 # ----------------------------
 
 def _tone_refs(freq_hz: float, fs: int, n: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -118,8 +113,14 @@ def _strip_silence(pcm: np.ndarray, cfg: Config) -> np.ndarray:
     return pcm[lead_n : pcm.size - trail_n]
 
 
-def _demod_body_to_bits(body: np.ndarray, cfg: Config, c_mark: np.ndarray, s_mark: np.ndarray,
-                        c_space: np.ndarray, s_space: np.ndarray) -> np.ndarray:
+def _demod_body_to_bits(
+    body: np.ndarray,
+    cfg: Config,
+    c_mark: np.ndarray,
+    s_mark: np.ndarray,
+    c_space: np.ndarray,
+    s_space: np.ndarray,
+) -> np.ndarray:
     sps = samples_per_symbol(cfg)
 
     n_sym = body.size // sps
@@ -129,10 +130,12 @@ def _demod_body_to_bits(body: np.ndarray, cfg: Config, c_mark: np.ndarray, s_mar
     body = body[: n_sym * sps]
     X = body.reshape(n_sym, sps)
 
+    # Quadrature energy for mark
     I_m = X @ c_mark
     Q_m = X @ s_mark
     E_m = I_m * I_m + Q_m * Q_m
 
+    # Quadrature energy for space
     I_s = X @ c_space
     Q_s = X @ s_space
     E_s = I_s * I_s + Q_s * Q_s
@@ -141,10 +144,10 @@ def _demod_body_to_bits(body: np.ndarray, cfg: Config, c_mark: np.ndarray, s_mar
 
 
 # ----------------------------
-# Demodulator (uniform entrypoint)
+# RX (canonical entrypoint)
 # ----------------------------
 
-def demodulate(pcm: np.ndarray, cfg: Config) -> np.ndarray:
+def rx(pcm: np.ndarray, cfg: Config) -> np.ndarray:
     """
     Demodulate AFSK/BFSK PCM into bits using per-symbol quadrature energy.
     Assumes perfect symbol timing and known lead/trail silence durations from cfg.
@@ -162,14 +165,14 @@ def demodulate(pcm: np.ndarray, cfg: Config) -> np.ndarray:
     return _demod_body_to_bits(body, cfg, c_mark, s_mark, c_space, s_space)
 
 
-# Back-compat alias (optional; remove once all callers migrate)
-demodulate_pcm = demodulate
+# ----------------------------
+# Cached RX (optional)
+# ----------------------------
 
-
-class Demodulator:
+class RX:
     """
-    Cached demodulator to avoid rebuilding tone references every call.
-    Uniform name across PHY modules: Demodulator(cfg).demodulate(pcm).
+    Cached receiver to avoid rebuilding tone references every call.
+    Uniform pattern: RX(cfg).rx(pcm) -> bits
     """
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -179,27 +182,51 @@ class Demodulator:
         self.c_mark, self.s_mark = _tone_refs(cfg.mark_hz, self.fs, self.sps)
         self.c_space, self.s_space = _tone_refs(cfg.space_hz, self.fs, self.sps)
 
-    def demodulate(self, pcm: np.ndarray) -> np.ndarray:
+    def rx(self, pcm: np.ndarray) -> np.ndarray:
         pcm = np.asarray(pcm, dtype=np.float32)
         body = _strip_silence(pcm, self.cfg)
         return _demod_body_to_bits(body, self.cfg, self.c_mark, self.s_mark, self.c_space, self.s_space)
 
 
-# Back-compat alias (optional; remove once all callers migrate)
-AFSKDemodulator = Demodulator
+# ----------------------------
+# Back-compat aliases (optional)
+# ----------------------------
+
+modulate = tx
+modulate_bits = tx
+demodulate = rx
+demodulate_pcm = rx
+Demodulator = RX
+AFSKDemodulator = RX
 
 
 # ----------------------------
-# Optional WAV helpers
+# Optional WAV helpers (stage-driven)
 # ----------------------------
 
 def write_bits_wav(bits: np.ndarray, wav_path: str, cfg: Config) -> None:
-    pcm = modulate(bits, cfg)
-    write_wav_mono(wav_path, pcm, cfg.sample_rate)
+    """
+    Debug helper: bits -> PCM via AFSK TX, then WAV write via Containers stage (tx).
+    Keeps this module reusable while respecting the container-stage boundary.
+    """
+    # Import locally to avoid hard dependency during pytest collection if containers isn’t wired yet.
+    from rflink_modem_v2.pipeline.stages.containers.stage import tx as containers_tx
+    from rflink_modem_v2.pipeline.stages.containers.config.stage_config import Config as ContainersCfg
+
+    pcm = tx(bits, cfg)
+    c_cfg = ContainersCfg(enabled=True, tx_path=wav_path, sample_rate=cfg.sample_rate)
+    containers_tx(pcm, c_cfg)
 
 
 def read_wav_bits(wav_path: str, cfg: Config) -> np.ndarray:
-    pcm, fs = read_wav_mono(wav_path)
-    if fs != cfg.sample_rate:
+    """
+    Debug helper: WAV read via Containers stage (rx), then PCM -> bits via AFSK RX.
+    """
+    from rflink_modem_v2.pipeline.stages.containers.stage import rx as containers_rx
+    from rflink_modem_v2.pipeline.stages.containers.config.stage_config import Config as ContainersCfg
+
+    c_cfg = ContainersCfg(enabled=True, rx_path=wav_path, sample_rate=cfg.sample_rate)
+    pcm, fs = containers_rx(None, c_cfg)
+    if int(fs) != int(cfg.sample_rate):
         raise ValueError(f"WAV fs={fs} does not match cfg.sample_rate={cfg.sample_rate}")
-    return demodulate(pcm, cfg)
+    return rx(pcm, cfg)

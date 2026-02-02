@@ -104,7 +104,12 @@ def test_afsk_cached_demodulator_matches_stateless():
     pcm = modulate(bits_in, cfg)
 
     bits_a = demodulate(pcm, cfg)
-    bits_b = Demodulator(cfg).demodulate(pcm)
+
+    d = Demodulator(cfg)
+    if hasattr(d, "rx"):
+        bits_b = d.rx(pcm)
+    else:
+        bits_b = d.demodulate(pcm)
 
     assert np.array_equal(bits_a, bits_b)
     assert np.array_equal(bits_b, bits_in)
